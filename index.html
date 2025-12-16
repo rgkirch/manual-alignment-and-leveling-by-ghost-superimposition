@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Symmetry Align Tool</title>
+
+    <!-- 1. Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- 2. React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <!-- 3. Babel (Compiles JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #262626; }
+        ::-webkit-scrollbar-thumb { background: #525252; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #737373; }
+        body { margin: 0; overflow: hidden; background-color: #171717; }
+        
+        /* Stop the "React DevTools" banner in some browsers */
+        #react-devtools-banner { display: none; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useRef, useEffect, useMemo } = React;
+
+        // --- INLINE ICONS (Replaces Lucide Dependency) ---
+        // This removes the network dependency and fixes the console errors.
+        const IconBase = ({ children, ...props }) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>{children}</svg>
+        );
+        const Upload = (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></IconBase>;
+        const Trash2 = (p) => <IconBase {...p}><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></IconBase>;
+        const Activity = (p) => <IconBase {...p}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></IconBase>;
+        const Sliders = (p) => <IconBase {...p}><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></IconBase>;
+        const RotateCw = (p) => <IconBase {...p}><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></IconBase>;
+        const ZoomIn = (p) => <IconBase {...p}><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></IconBase>;
+        const Move = (p) => <IconBase {...p}><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="19 9 22 12 19 15"/><polyline points="14 19 12 22 9 19"/><polyline points="2 12 22 12"/><polyline points="12 2 12 22"/></IconBase>;
+        const Eye = (p) => <IconBase {...p}><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></IconBase>;
+        const EyeOff = (p) => <IconBase {...p}><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></IconBase>;
+        const FlipHorizontal = (p) => <IconBase {...p}><path d="M8 3H5a2 2 0 0 0-2 2v14c0 1.1.9 2 2 2h3"/><path d="M16 3h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-3"/><path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/></IconBase>;
+        const FlipVertical = (p) => <IconBase {...p}><path d="M21 8h-2a2 2 0 0 1-2-2V3"/><path d="M21 16h-2a2 2 0 0 0-2 2v3"/><path d="M3 8h2a2 2 0 0 0 2-2V3"/><path d="M3 16h2a2 2 0 0 1 2 2v3"/><path d="M14 12h-2"/><path d="M20 12h-2"/><path d="M8 12H6"/><path d="M2 12h2"/></IconBase>;
+        const Download = (p) => <IconBase {...p}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></IconBase>;
+
+
+        // --- Reusable Histogram Component ---
+        const LevelsHistogram = ({
+            imageSrc,
+            channelMode,
+            histogram,
+            setHistogram,
+            blackPoint, setBlackPoint,
+            whitePoint, setWhitePoint,
+            midPoint, setMidPoint
+        }) => {
+            const canvasRef = useRef(null);
+            const [isDragging, setIsDragging] = useState(null);
+
+            // 1. Calculate Histogram
+            useEffect(() => {
+                if (!imageSrc) return;
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.src = imageSrc;
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 300;
+                    canvas.height = (300 * img.height) / img.width;
+                    const ctx = canvas.getContext('2d');
+                    if (!ctx) return;
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+                    try {
+                        const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+                        const hist = new Array(256).fill(0);
+                        for (let i = 0; i < data.length; i += 4) {
+                            let val;
+                            if (channelMode === 'Red') val = data[i];
+                            else if (channelMode === 'Green') val = data[i+1];
+                            else if (channelMode === 'Blue') val = data[i+2];
+                            else val = Math.round(0.299 * data[i] + 0.587 * data[i+1] + 0.114 * data[i+2]);
+                            hist[val]++;
+                        }
+                        setHistogram(hist);
+                    } catch (e) {
+                        console.warn("Histogram unavailable (CORS restricted image)");
+                    }
+                };
+            }, [imageSrc, channelMode]);
+
+            // 2. Coordinate Helpers
+            const width = 280;
+            const valToX = (val) => (val / 255) * width;
+            const xToVal = (x) => Math.max(0, Math.min(255, Math.round((x / width) * 255)));
+
+            // 3. Drawing
+            useEffect(() => {
+                const canvas = canvasRef.current;
+                if (!canvas) return;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) return;
+
+                const w = canvas.width;
+                const h = canvas.height;
+                const graphH = h - 25;
+
+                ctx.clearRect(0, 0, w, h);
+
+                const max = Math.max(...histogram, 1);
+                const normalizedHist = histogram.map(v => v / max);
+
+                ctx.fillStyle = '#6366f1';
+                ctx.globalAlpha = 0.6;
+                const barW = w / 256;
+                normalizedHist.forEach((val, i) => {
+                    const barH = val * graphH;
+                    ctx.fillRect(i * barW, graphH - barH, barW, barH);
+                });
+
+                ctx.fillStyle = '#000000';
+                ctx.globalAlpha = 0.7;
+                const bx = valToX(blackPoint);
+                const wx = valToX(whitePoint);
+                const mx = valToX(midPoint);
+
+                ctx.fillRect(0, 0, bx, graphH);
+                ctx.fillRect(wx, 0, w - wx, graphH);
+
+                ctx.globalAlpha = 1.0;
+                ctx.strokeStyle = '#525252';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(0, graphH);
+                ctx.lineTo(w, graphH);
+                ctx.stroke();
+
+                const drawHandle = (x, fillColor, strokeColor, type) => {
+                    ctx.fillStyle = fillColor;
+                    ctx.strokeStyle = strokeColor;
+                    ctx.lineWidth = 2;
+                    ctx.beginPath();
+                    if (type === 'triangle') {
+                        ctx.moveTo(x, graphH);
+                        ctx.lineTo(x - 7, graphH + 12);
+                        ctx.lineTo(x + 7, graphH + 12);
+                        ctx.closePath();
+                    } else {
+                        ctx.beginPath();
+                        ctx.moveTo(x, graphH);
+                        ctx.lineTo(x - 6, graphH + 12);
+                        ctx.lineTo(x + 6, graphH + 12);
+                        ctx.closePath();
+                    }
+                    ctx.fill();
+                    ctx.stroke();
+                };
+
+                drawHandle(bx, '#000000', '#ffffff', 'triangle');
+                drawHandle(wx, '#ffffff', '#000000', 'triangle');
+                if (whitePoint > blackPoint + 2) {
+                    drawHandle(mx, '#808080', '#ffffff', 'diamond');
+                }
+
+            }, [histogram, blackPoint, whitePoint, midPoint]);
+
+            const handleMouseDown = (e) => {
+                const rect = canvasRef.current.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const bx = valToX(blackPoint);
+                const wx = valToX(whitePoint);
+                const mx = valToX(midPoint);
+                const hitRadius = 15;
+
+                if (Math.abs(x - mx) < hitRadius) setIsDragging('mid');
+                else if (Math.abs(x - bx) < hitRadius) setIsDragging('black');
+                else if (Math.abs(x - wx) < hitRadius) setIsDragging('white');
+            };
+
+            const handleMouseMove = (e) => {
+                if (!isDragging) return;
+                const rect = canvasRef.current.getBoundingClientRect();
+                let x = e.clientX - rect.left;
+                x = Math.max(0, Math.min(width, x));
+                const val = xToVal(x);
+
+                if (isDragging === 'black') {
+                    const limit = Math.min(midPoint - 1, whitePoint - 2);
+                    setBlackPoint(Math.min(val, limit));
+                } else if (isDragging === 'white') {
+                    const limit = Math.max(midPoint + 1, blackPoint + 2);
+                    setWhitePoint(Math.max(val, limit));
+                } else if (isDragging === 'mid') {
+                    const min = blackPoint + 1;
+                    const max = whitePoint - 1;
+                    setMidPoint(Math.max(min, Math.min(max, val)));
+                }
+            };
+
+            return (
+                <div className="bg-neutral-950 rounded border border-neutral-800 p-2 select-none">
+                    <canvas
+                        ref={canvasRef}
+                        width={280}
+                        height={120}
+                        className="cursor-pointer w-full touch-none"
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={() => setIsDragging(null)}
+                        onMouseLeave={() => setIsDragging(null)}
+                    />
+                    <div className="flex justify-between text-[10px] text-neutral-500 mt-2 px-1 font-mono">
+                        <span>IN: {blackPoint}</span>
+                        <span className="text-neutral-400">MID: {midPoint}</span>
+                        <span>WHITE: {whitePoint}</span>
+                    </div>
+                </div>
+            );
+        };
+
+        // --- Main App Component ---
+        function SymmetryApp() {
+            const [imageSrc, setImageSrc] = useState(null);
+            const [originalDimensions, setOriginalDimensions] = useState({ width: 0, height: 0 });
+            const [position, setPosition] = useState({ x: 0, y: 0 });
+            const [rotation, setRotation] = useState(0);
+            const [zoom, setZoom] = useState(1);
+            const [channelMode, setChannelMode] = useState('RGB');
+            const [levels, setLevels] = useState({
+                RGB: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                Red: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                Green: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                Blue: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+            });
+            const [histogram, setHistogram] = useState(new Array(256).fill(0));
+            const [showGhost, setShowGhost] = useState(true);
+            const [ghostOpacity, setGhostOpacity] = useState(0.5);
+            const [mirrorH, setMirrorH] = useState(true);
+            const [mirrorV, setMirrorV] = useState(false);
+            const [isDraggingImage, setIsDraggingImage] = useState(false);
+            const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+            const fileInputRef = useRef(null);
+            const viewportRef = useRef(null);
+
+            const { rParams, gParams, bParams } = useMemo(() => {
+                const calculateParams = (channelSettings) => {
+                    const { blackPoint, whitePoint, midPoint, outputBlackPoint, outputWhitePoint } = channelSettings;
+                    const w = whitePoint <= blackPoint ? blackPoint + 1 : whitePoint;
+                    const inputRange = w - blackPoint;
+                    const inputSlope = 255 / inputRange;
+                    const inputIntercept = -blackPoint * inputSlope / 255;
+                    let midNorm = (midPoint - blackPoint) / inputRange;
+                    midNorm = Math.max(0.01, Math.min(0.99, midNorm));
+                    const exponent = Math.log(0.5) / Math.log(midNorm);
+                    const outputRange = outputWhitePoint - outputBlackPoint;
+                    const outputSlope = outputRange / 255;
+                    const outputIntercept = outputBlackPoint / 255;
+                    return { inputSlope, inputIntercept, exponent, outputSlope, outputIntercept };
+                };
+                return {
+                    rParams: calculateParams(levels.Red),
+                    gParams: calculateParams(levels.Green),
+                    bParams: calculateParams(levels.Blue),
+                };
+            }, [levels]);
+
+            const handleFileChange = (event) => {
+                const file = event.target.files?.[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            setOriginalDimensions({ width: img.width, height: img.height });
+                            setImageSrc(e.target?.result);
+                            setPosition({ x: 0, y: 0 });
+                            setRotation(0);
+                            setLevels({
+                                RGB: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                                Red: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                                Green: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                                Blue: { blackPoint: 0, whitePoint: 255, midPoint: 128, outputBlackPoint: 0, outputWhitePoint: 255 },
+                            });
+                            if (viewportRef.current) {
+                                const viewportW = viewportRef.current.offsetWidth;
+                                const viewportH = viewportRef.current.offsetHeight;
+                                const imgW = img.width;
+                                const imgH = img.height;
+                                if (imgW > 0 && imgH > 0) {
+                                    const scaleX = viewportW / imgW;
+                                    const scaleY = viewportH / imgH;
+                                    setZoom(Math.min(scaleX, scaleY) * 0.9);
+                                } else {
+                                    setZoom(1);
+                                }
+                            } else {
+                                setZoom(1);
+                            }
+                        };
+                        img.src = e.target?.result;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleMouseDown = (e) => {
+                if (!imageSrc) return;
+                setIsDraggingImage(true);
+                setDragStart({ x: e.clientX - position.x * zoom, y: e.clientY - position.y * zoom });
+            };
+
+            const handleMouseMove = (e) => {
+                if (isDraggingImage) {
+                    setPosition({
+                        x: (e.clientX - dragStart.x) / zoom,
+                        y: (e.clientY - dragStart.y) / zoom
+                    });
+                }
+            };
+
+            const handleExport = () => {
+                if (!imageSrc) return;
+                const img = new Image();
+                img.src = imageSrc;
+                img.onload = () => {
+                    const rawCanvas = document.createElement('canvas');
+                    rawCanvas.width = originalDimensions.width;
+                    rawCanvas.height = originalDimensions.height;
+                    const rawCtx = rawCanvas.getContext('2d');
+                    if (!rawCtx) return;
+
+                    rawCtx.drawImage(img, 0, 0);
+                    const imageData = rawCtx.getImageData(0, 0, rawCanvas.width, rawCanvas.height);
+                    const data = imageData.data;
+
+                    const createProcessChannel = (params) => (val) => {
+                        const c_in = val / 255.0;
+                        const c_after_input = c_in * params.inputSlope + params.inputIntercept;
+                        const c_after_gamma = Math.pow(Math.max(0.0, Math.min(1.0, c_after_input)), params.exponent);
+                        const c_out = c_after_gamma * params.outputSlope + params.outputIntercept;
+                        return Math.floor(Math.max(0.0, Math.min(1.0, c_out)) * 255);
+                    };
+
+                    const processR = createProcessChannel(rParams);
+                    const processG = createProcessChannel(gParams);
+                    const processB = createProcessChannel(bParams);
+
+                    for (let i = 0; i < data.length; i += 4) {
+                        data[i] = processR(data[i]);
+                        data[i+1] = processG(data[i+1]);
+                        data[i+2] = processB(data[i+2]);
+                    }
+                    rawCtx.putImageData(imageData, 0, 0);
+
+                    const exportCanvas = document.createElement('canvas');
+                    const diag = Math.sqrt(originalDimensions.width ** 2 + originalDimensions.height ** 2);
+                    const size = Math.ceil(diag * 1.2);
+                    exportCanvas.width = size;
+                    exportCanvas.height = size;
+                    const ctx = exportCanvas.getContext('2d');
+                    if (!ctx) return;
+
+                    ctx.imageSmoothingEnabled = true;
+                    ctx.imageSmoothingQuality = 'high';
+
+                    const cx = exportCanvas.width / 2;
+                    const cy = exportCanvas.height / 2;
+
+                    ctx.clearRect(0, 0, size, size);
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.rotate((rotation * Math.PI) / 180);
+                    ctx.translate(position.x, position.y);
+                    ctx.drawImage(rawCanvas, -originalDimensions.width / 2, -originalDimensions.height / 2);
+                    ctx.restore();
+
+                    const link = document.createElement('a');
+                    link.download = 'aligned-fusion-ready.png';
+                    link.href = exportCanvas.toDataURL('image/png');
+                    link.click();
+                };
+            };
+
+            const handleAutoLevels = () => {
+                if (!histogram || histogram.length === 0) return;
+                const totalPixels = histogram.reduce((a, b) => a + b, 0);
+                if (totalPixels === 0) return;
+                const threshold = 0.001;
+                const thresholdPixels = totalPixels * threshold;
+                let black = 0;
+                let white = 255;
+                let cumulative = 0;
+                for (let i = 0; i < 256; i++) {
+                    cumulative += histogram[i];
+                    if (cumulative >= thresholdPixels) {
+                        black = i;
+                        break;
+                    }
+                }
+                cumulative = 0;
+                for (let i = 255; i >= 0; i--) {
+                    cumulative += histogram[i];
+                    if (cumulative >= thresholdPixels) {
+                        white = i;
+                        break;
+                    }
+                }
+                if (black >= white) { black = 0; white = 255; }
+                const mid = Math.round((black + white) / 2);
+                setLevels(p => {
+                    const newP = { ...p };
+                    const applyPoints = (channel) => {
+                        newP[channel].blackPoint = black;
+                        newP[channel].whitePoint = white;
+                        newP[channel].midPoint = mid;
+                    }
+                    if (channelMode === 'RGB') {
+                        applyPoints('RGB'); applyPoints('Red'); applyPoints('Green'); applyPoints('Blue');
+                    } else {
+                        applyPoints(channelMode);
+                    }
+                    return newP;
+                });
+            };
+
+            return (
+                <div className="flex h-screen bg-neutral-900 text-white font-sans overflow-hidden select-none"
+                    onMouseMove={handleMouseMove}
+                    onMouseUp={() => setIsDraggingImage(false)}
+                    onMouseLeave={() => setIsDraggingImage(false)}
+                >
+                    <svg width="0" height="0" className="absolute pointer-events-none">
+                        <defs>
+                            <filter id="levels-complex" colorInterpolationFilters="sRGB">
+                                <feComponentTransfer>
+                                    <feFuncR type="linear" slope={rParams.inputSlope} intercept={rParams.inputIntercept} />
+                                    <feFuncG type="linear" slope={gParams.inputSlope} intercept={gParams.inputIntercept} />
+                                    <feFuncB type="linear" slope={bParams.inputSlope} intercept={bParams.inputIntercept} />
+                                </feComponentTransfer>
+                                <feComponentTransfer>
+                                    <feFuncR type="gamma" exponent={rParams.exponent} />
+                                    <feFuncG type="gamma" exponent={gParams.exponent} />
+                                    <feFuncB type="gamma" exponent={bParams.exponent} />
+                                </feComponentTransfer>
+                                <feComponentTransfer>
+                                    <feFuncR type="linear" slope={rParams.outputSlope} intercept={rParams.outputIntercept} />
+                                    <feFuncG type="linear" slope={gParams.outputSlope} intercept={gParams.outputIntercept} />
+                                    <feFuncB type="linear" slope={bParams.outputSlope} intercept={bParams.outputIntercept} />
+                                </feComponentTransfer>
+                            </filter>
+                        </defs>
+                    </svg>
+
+                    <div className="w-80 flex-shrink-0 bg-neutral-800 border-r border-neutral-700 p-4 flex flex-col gap-6 overflow-y-auto z-10 shadow-xl scrollbar-thin scrollbar-thumb-neutral-600">
+                        <h1 className="text-xl font-bold flex items-center gap-2 text-indigo-400">
+                            <Sliders size={24} />
+                            Symmetry Align
+                        </h1>
+
+                        {!imageSrc ? (
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="h-24 border-2 border-dashed border-neutral-600 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:border-indigo-400 hover:bg-neutral-700 transition"
+                            >
+                                <Upload className="mb-2 text-neutral-400" size={20}/>
+                                <span className="text-xs text-neutral-400">Upload Image</span>
+                                <input type="file" ref={fileInputRef} onChange={handleFileChange} className="hidden" accept="image/*" />
+                            </div>
+                        ) : (
+                            <button onClick={() => setImageSrc(null)} className="bg-red-900/50 hover:bg-red-900 text-red-200 py-2 rounded text-xs flex items-center justify-center gap-2">
+                                <Trash2 size={14} /> Reset
+                            </button>
+                        )}
+
+                        {imageSrc && (
+                            <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                    <label className="text-xs font-bold uppercase text-neutral-400 tracking-wider flex items-center gap-2">
+                                        <Activity size={14} /> Levels
+                                    </label>
+                                    <div className="flex items-center gap-2">
+                                        <button onClick={handleAutoLevels} className="bg-neutral-700 hover:bg-neutral-600 text-neutral-300 text-xs rounded px-2 py-1 transition-colors">
+                                            Auto
+                                        </button>
+                                        <select value={channelMode} onChange={(e) => setChannelMode(e.target.value)} className="bg-neutral-900 border border-neutral-700 text-neutral-300 text-xs rounded px-2 py-1">
+                                            <option value="RGB">RGB</option>
+                                            <option value="Red">Red</option>
+                                            <option value="Green">Green</option>
+                                            <option value="Blue">Blue</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <LevelsHistogram
+                                    imageSrc={imageSrc}
+                                    channelMode={channelMode}
+                                    histogram={histogram}
+                                    setHistogram={setHistogram}
+                                    blackPoint={levels[channelMode].blackPoint}
+                                    setBlackPoint={(v) => setLevels(p => {
+                                        const newP = { ...p };
+                                        if (channelMode === 'RGB') {
+                                            newP.RGB.blackPoint = v; newP.Red.blackPoint = v; newP.Green.blackPoint = v; newP.Blue.blackPoint = v;
+                                        } else { newP[channelMode].blackPoint = v; }
+                                        return newP;
+                                    })}
+                                    whitePoint={levels[channelMode].whitePoint}
+                                    setWhitePoint={(v) => setLevels(p => {
+                                        const newP = { ...p };
+                                        if (channelMode === 'RGB') {
+                                            newP.RGB.whitePoint = v; newP.Red.whitePoint = v; newP.Green.whitePoint = v; newP.Blue.whitePoint = v;
+                                        } else { newP[channelMode].whitePoint = v; }
+                                        return newP;
+                                    })}
+                                    midPoint={levels[channelMode].midPoint}
+                                    setMidPoint={(v) => setLevels(p => {
+                                        const newP = { ...p };
+                                        if (channelMode === 'RGB') {
+                                            newP.RGB.midPoint = v; newP.Red.midPoint = v; newP.Green.midPoint = v; newP.Blue.midPoint = v;
+                                        } else { newP[channelMode].midPoint = v; }
+                                        return newP;
+                                    })}
+                                />
+                                <div className="text-[10px] text-neutral-500 mt-2 px-1 font-mono space-y-2">
+                                    <div className="flex justify-between">
+                                        <label>Output Black: {levels[channelMode].outputBlackPoint}</label>
+                                        <label>Output White: {levels[channelMode].outputWhitePoint}</label>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <input type="range" min="0" max="255" value={levels[channelMode].outputBlackPoint} onChange={(e) => {
+                                            const value = parseInt(e.target.value);
+                                            setLevels(p => {
+                                                const newP = { ...p };
+                                                const newBlack = Math.min(value, newP[channelMode].outputWhitePoint - 1);
+                                                if (channelMode === 'RGB') {
+                                                    newP.RGB.outputBlackPoint = newBlack; newP.Red.outputBlackPoint = newBlack; newP.Green.outputBlackPoint = newBlack; newP.Blue.outputBlackPoint = newBlack;
+                                                } else { newP[channelMode].outputBlackPoint = newBlack; }
+                                                return newP;
+                                            })
+                                        }} className="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-gray-400" />
+                                        <input type="range" min="0" max="255" value={levels[channelMode].outputWhitePoint} onChange={(e) => {
+                                            const value = parseInt(e.target.value);
+                                            setLevels(p => {
+                                                const newP = { ...p };
+                                                const newWhite = Math.max(value, newP[channelMode].outputBlackPoint + 1);
+                                                if (channelMode === 'RGB') {
+                                                    newP.RGB.outputWhitePoint = newWhite; newP.Red.outputWhitePoint = newWhite; newP.Green.outputWhitePoint = newWhite; newP.Blue.outputWhitePoint = newWhite;
+                                                } else { newP[channelMode].outputWhitePoint = newWhite; }
+                                                return newP;
+                                            })
+                                        }} className="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-white" />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <hr className="border-neutral-700" />
+
+                        <div className="space-y-4">
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider flex items-center gap-2">
+                                        <RotateCw size={14} /> Rotation
+                                    </label>
+                                    <span className="text-xs font-mono text-indigo-300">{rotation.toFixed(2)}°</span>
+                                </div>
+                                <input type="range" min="-180" max="180" step="0.05" value={rotation} onChange={(e) => setRotation(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                                <div className="flex gap-2">
+                                    <button onClick={() => setRotation(r => r - 0.1)} className="flex-1 bg-neutral-700 text-[10px] py-1 rounded hover:bg-neutral-600">-0.1°</button>
+                                    <button onClick={() => setRotation(0)} className="flex-1 bg-neutral-700 text-[10px] py-1 rounded hover:bg-neutral-600">0°</button>
+                                    <button onClick={() => setRotation(r => r + 0.1)} className="flex-1 bg-neutral-700 text-[10px] py-1 rounded hover:bg-neutral-600">+0.1°</button>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex justify-between">
+                                    <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider flex items-center gap-2">
+                                        <ZoomIn size={14} /> Zoom
+                                    </label>
+                                    <span className="text-xs font-mono text-indigo-300">{Math.round(zoom * 100)}%</span>
+                                </div>
+                                <input type="range" min="0.1" max="5" step="0.05" value={zoom} onChange={(e) => setZoom(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider flex items-center gap-2">
+                                    <Move size={14} /> Position (Pixels)
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] text-neutral-500">X Offset</span>
+                                        <div className="flex">
+                                            <button onClick={() => setPosition(p => ({...p, x: p.x - 1}))} className="bg-neutral-700 hover:bg-neutral-600 rounded-l px-2">-</button>
+                                            <input type="number" value={position.x} onChange={(e) => setPosition(p => ({...p, x: parseInt(e.target.value) || 0}))} className="bg-neutral-900 border-y border-neutral-700 w-full text-center px-2 py-1 text-xs font-mono" />
+                                            <button onClick={() => setPosition(p => ({...p, x: p.x + 1}))} className="bg-neutral-700 hover:bg-neutral-600 rounded-r px-2">+</button>
+                                        </div>
+                                    </div>
+                                    <div className="flex flex-col gap-1">
+                                        <span className="text-[10px] text-neutral-500">Y Offset</span>
+                                        <div className="flex">
+                                            <button onClick={() => setPosition(p => ({...p, y: p.y - 1}))} className="bg-neutral-700 hover:bg-neutral-600 rounded-l px-2">-</button>
+                                            <input type="number" value={position.y} onChange={(e) => setPosition(p => ({...p, y: parseInt(e.target.value) || 0}))} className="bg-neutral-900 border-y border-neutral-700 w-full text-center px-2 py-1 text-xs font-mono" />
+                                            <button onClick={() => setPosition(p => ({...p, y: p.y + 1}))} className="bg-neutral-700 hover:bg-neutral-600 rounded-r px-2">+</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr className="border-neutral-700" />
+
+                        <div className="space-y-4">
+                            <div className="flex justify-between items-center">
+                                <label className="text-xs font-bold uppercase text-neutral-500 tracking-wider">Ghost Overlay</label>
+                                <button onClick={() => setShowGhost(!showGhost)} className={`p-1 rounded ${showGhost ? 'bg-indigo-600 text-white' : 'bg-neutral-700 text-neutral-400'}`}>
+                                    {showGhost ? <Eye size={16} /> : <EyeOff size={16} />}
+                                </button>
+                            </div>
+                            {showGhost && (
+                                <>
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-neutral-400">Opacity</span>
+                                        <input type="range" min="0" max="1" step="0.05" value={ghostOpacity} onChange={(e) => setGhostOpacity(parseFloat(e.target.value))} className="w-full h-1 bg-neutral-700 rounded-lg appearance-none cursor-pointer accent-teal-500" />
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button onClick={() => setMirrorH(!mirrorH)} className={`flex items-center justify-center gap-2 py-2 text-xs rounded border ${mirrorH ? 'bg-teal-900/30 border-teal-500 text-teal-200' : 'bg-neutral-800 border-neutral-600 text-neutral-400'}`}>
+                                            <FlipHorizontal size={14} /> Mirror Horiz
+                                        </button>
+                                        <button onClick={() => setMirrorV(!mirrorV)} className={`flex items-center justify-center gap-2 py-2 text-xs rounded border ${mirrorV ? 'bg-teal-900/30 border-teal-500 text-teal-200' : 'bg-neutral-800 border-neutral-600 text-neutral-400'}`}>
+                                            <FlipVertical size={14} /> Mirror Vert
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+
+                        <div className="mt-auto pt-6 border-t border-neutral-700">
+                            <button onClick={handleExport} disabled={!imageSrc} className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 transition">
+                                <Download size={18} /> Download
+                            </button>
+                        </div>
+                    </div>
+
+                    <div ref={viewportRef} className="flex-1 relative bg-[#1a1a1a] overflow-hidden cursor-move" onMouseDown={handleMouseDown} style={{ backgroundImage: 'radial-gradient(#333 1px, transparent 1px)', backgroundSize: '20px 20px' }}>
+                        {!imageSrc && (
+                            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                                <div className="text-neutral-600 text-center">
+                                    <p className="text-lg font-medium">Drag & Drop Image Here</p>
+                                    <p className="text-sm">Use the Histogram to isolate your object</p>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="absolute inset-0 pointer-events-none z-50 flex items-center justify-center">
+                            <div className="w-full h-[1px] bg-green-500/50 shadow-[0_0_2px_rgba(0,255,0,0.8)]"></div>
+                            <div className="h-full w-[1px] bg-green-500/50 shadow-[0_0_2px_rgba(0,255,0,0.8)] absolute"></div>
+                            <div className="w-2 h-2 bg-green-400 rounded-full shadow-[0_0_4px_rgba(0,255,0,1)] absolute"></div>
+                        </div>
+
+                        {imageSrc && (
+                            <div className="absolute inset-0 flex items-center justify-center overflow-visible pointer-events-none">
+                                <div className="relative w-0 h-0 flex items-center justify-center">
+                                    {showGhost && (
+                                        <div className="absolute w-0 h-0 flex items-center justify-center pointer-events-none mix-blend-difference" style={{ transform: `scaleX(${mirrorH ? -1 : 1}) scaleY(${mirrorV ? -1 : 1})`, zIndex: 20 }}>
+                                            <img src={imageSrc} alt="Ghost" style={{ transform: `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg) scale(${zoom})`, opacity: ghostOpacity, maxWidth: 'none', filter: `url(#levels-complex) grayscale(100%) invert(1)` }} draggable={false} />
+                                        </div>
+                                    )}
+                                    <div className="absolute w-0 h-0 flex items-center justify-center" style={{ zIndex: 10 }}>
+                                        <img src={imageSrc} alt="Main" style={{ transform: `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg) scale(${zoom})`, maxWidth: 'none', filter: `url(#levels-complex)` }} draggable={false} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<SymmetryApp />);
+    </script>
+</body>
+</html>
